@@ -19,6 +19,9 @@ app.use(express.json());
 // sessions
 app.use(sessionMiddleware);
 
+// static files
+app.use(express.static(path.join(__dirname, "public")));
+
 // make user available in views
 app.use((req, res, next) => {
     res.locals.user = req.session.user || null;
