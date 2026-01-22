@@ -1,7 +1,9 @@
+require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const sessionMiddleware = require("./config/session");
 const authRoutes = require("./routes/authRoutes");
+const videoRoutes = require("./routes/videoRoutes");
 const requireAuth = require("./middleware/requireAuth");
 
 const app = express();
@@ -12,6 +14,7 @@ app.set("views", path.join(__dirname, "views"));
 
 // body parsing
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
 // sessions
 app.use(sessionMiddleware);
@@ -24,9 +27,19 @@ app.use((req, res, next) => {
 
 // routes
 app.use(authRoutes);
+app.use(videoRoutes);
+
+// root path redirects to login
+app.get("/", (req, res) => {
+    if (req.session.user) {
+        res.redirect("/home");
+    } else {
+        res.redirect("/login");
+    }
+});
 
 // protected home
-app.get("/", requireAuth, (req, res) => {
+app.get("/home", requireAuth, (req, res) => {
     res.render("home", { user: req.session.user });
 });
 
@@ -36,5 +49,5 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT} updated...`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 

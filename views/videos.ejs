@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Favorite Videos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/public/styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <div class="header-nav">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <a href="/"><i class="fas fa-home"></i> Back to Home</a>
+                </div>
+                <div>
+                    <span>Hello, <%= user.fullName %></span>
+                    <form action="/logout" method="post" style="display:inline;">
+                        <button type="submit" class="logout-btn">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <% if (error) { %>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle"></i>
+                <%= error %>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            <% } %>
+                <% if (success) { %>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="fas fa-check-circle"></i>
+                        <%= success %>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <% } %>
+
+                        <!-- Search Section -->
+                        <div class="search-section">
+                            <h2><i class="fas fa-search"></i> Search YouTube Videos</h2>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control search-input" id="searchInput"
+                                    placeholder="Type the video title you want to search for...">
+                                <button class="btn btn-primary" type="button" id="searchBtn">Search</button>
+                            </div>
+
+                            <div id="videoResults" class="video-results" style="display:none;">
+                                <!-- Results will be dynamically loaded here -->
+                            </div>
+                            <div id="noResults" class="text-center text-muted mt-3" style="display:none;">
+                                <p>No results found. Try a different search.</p>
+                            </div>
+                        </div>
+
+                        <!-- Favorites Section -->
+                        <div class="favorites-section">
+                            <h2><i class="fas fa-star"></i> My Saved Videos</h2>
+                            <% if (videos && videos.length> 0) { %>
+                                <div class="favorites-grid" id="favoritesContainer">
+                                    <% videos.forEach(video=> { %>
+                                        <div class="favorite-card" draggable="true" data-video-id="<%= video.id %>">
+                                            <div class="favorite-thumbnail">
+                                                <img src="<%= video.thumbnailUrl %>" alt="<%= video.videoTitle %>">
+                                            </div>
+                                            <div class="favorite-info">
+                                                <h5>
+                                                    <%= video.videoTitle %>
+                                                </h5>
+                                                <p>
+                                                    <%= video.description || 'No description' %>
+                                                </p>
+                                                <div class="favorite-actions">
+                                                    <a href="https://www.youtube.com/watch?v=<%= video.videoId %>"
+                                                        target="_blank" class="btn-watch">
+                                                        <i class="fas fa-play"></i> Watch on YouTube
+                                                    </a>
+                                                    <button class="btn-delete" onclick="deleteVideo('<%= video.id %>')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="drag-hint">
+                                                <i class="fas fa-arrows-alt"></i> Drag to reorder
+                                            </div>
+                                        </div>
+                                        <% }); %>
+                                </div>
+                                <% } else { %>
+                                    <div class="empty-state">
+                                        <i class="fas fa-video"></i>
+                                        <h4>No saved videos yet</h4>
+                                        <p>Search above and click "Save" to store your favorites here.</p>
+                                    </div>
+                                    <% } %>
+                        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let draggedElement = null;
+
+        document.getElementById('searchBtn').addEventListener('click', searchVideos);
+        document.getElementById('searchInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') searchVideos();
+        });
+
+        function escapeForJs(value) {
+            return String(value || "")
+                .replace(/\\/g, "\\\\")
+                .replace(/'/g, "\\'")
+                .replace(/\n/g, " ");
+        }
+
+        async function searchVideos() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                alert("Please enter a search term.");
+                return;
+            }
+
+            const resultsDiv = document.getElementById('videoResults');
+            const noResultsDiv = document.getElementById('noResults');
+
+            resultsDiv.innerHTML = '<p class="text-center">Searching...</p>';
+            resultsDiv.style.display = 'block';
+            noResultsDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/videos/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ q: query })
+                });
+
+                const isJson = (response.headers.get('content-type') || '').includes('application/json');
+                const data = isJson ? await response.json() : { success: false, error: await response.text() };
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Search failed. Please try again.');
+                }
+
+                if (!data.videos || data.videos.length === 0) {
+                    resultsDiv.style.display = 'none';
+                    noResultsDiv.style.display = 'block';
+                    return;
+                }
+
+                resultsDiv.innerHTML = "";
+
+                data.videos.forEach(video => {
+                    const videoId = escapeForJs(video.videoId);
+                    const title = escapeForJs(video.videoTitle);
+                    const thumbnail = escapeForJs(video.thumbnailUrl);
+                    const description = escapeForJs(video.description || "No description");
+
+                    const card = document.createElement("div");
+                    card.className = "video-item-result";
+
+                    card.innerHTML = `
+                        <img src="${thumbnail}" alt="${title}">
+                        <div class="video-result-info">
+                            <div class="title" title="${title}">${title}</div>
+                            <p class="text-muted" style="font-size: 0.75rem; margin: 3px 0;">${description}</p>
+                            <button class="btn-add-video" onclick="saveVideo('${videoId}', '${title}', '${thumbnail}', '${description}')">
+                                <i class="fas fa-bookmark"></i> Save
+                            </button>
+                        </div>
+                    `;
+
+                    resultsDiv.appendChild(card);
+                });
+            } catch (err) {
+                console.error('Search error:', err);
+                resultsDiv.innerHTML = `<p class="text-danger text-center">${err.message || 'Search failed. Please try again.'}</p>`;
+            }
+        }
+
+        async function saveVideo(videoId, title, thumbnail, description) {
+            try {
+                const response = await fetch('/videos/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        videoTitle: title,
+                        videoId: videoId,
+                        thumbnailUrl: thumbnail,
+                        description: description
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    location.reload();
+                } else {
+                    alert((data && data.error) || 'Failed to save video');
+                }
+            } catch (error) {
+                console.error('Save error:', error);
+                alert('Failed to save video');
+            }
+        }
+
+        async function deleteVideo(videoId) {
+            if (!confirm('Are you sure you want to delete this video?')) return;
+
+            try {
+                const response = await fetch('/videos/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ videoId: videoId })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    location.reload();
+                } else {
+                    alert((data && data.error) || 'Failed to delete video');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert('Failed to delete video');
+            }
+        }
+
+        const container = document.getElementById('favoritesContainer');
+        if (container) {
+            container.addEventListener('dragstart', function (e) {
+                if (e.target.classList.contains('favorite-card')) {
+                    draggedElement = e.target;
+                    e.target.style.opacity = '0.5';
+                }
+            });
+
+            container.addEventListener('dragend', function (e) {
+                if (e.target.classList.contains('favorite-card')) {
+                    e.target.style.opacity = '1';
+                }
+            });
+
+            container.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                const afterElement = getDragAfterElement(container, e.clientY);
+                if (afterElement == null) {
+                    container.appendChild(draggedElement);
+                } else {
+                    container.insertBefore(draggedElement, afterElement);
+                }
+            });
+
+            container.addEventListener('drop', function (e) {
+                e.preventDefault();
+                updateOrder();
+            });
+        }
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.favorite-card:not([style*="opacity"])')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        async function updateOrder() {
+            const cards = document.querySelectorAll('.favorite-card');
+            const videoOrder = Array.from(cards).map((card, index) => ({
+                id: parseInt(card.dataset.videoId),
+                position: index
+            }));
+
+            try {
+                const response = await fetch('/videos/reorder', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ videoOrder: videoOrder })
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to update order');
+                }
+            } catch (error) {
+                console.error('Reorder error:', error);
+            }
+        }
+    </script>
+</body>
+
+</html>

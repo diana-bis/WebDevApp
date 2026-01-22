@@ -14,7 +14,7 @@ class AuthController {
             // store minimal user in session
             req.session.user = { id: user.id, email: user.email, fullName: user.fullName };
 
-            res.redirect("/");
+            res.redirect("/home");
         } catch (err) {
             res.status(400).render("register", { error: err.message });
         }
@@ -31,13 +31,16 @@ class AuthController {
 
             req.session.user = { id: user.id, email: user.email, fullName: user.fullName };
 
-            res.redirect("/");
+            res.redirect("/home");
         } catch (err) {
             res.status(400).render("login", { error: err.message });
         }
     }
 
     logout(req, res) {
+        res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+        res.set("Pragma", "no-cache");
+        res.set("Expires", "0");
         req.session.destroy(() => {
             res.redirect("/login");
         });
